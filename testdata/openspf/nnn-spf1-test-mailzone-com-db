@@ -1,0 +1,117 @@
+01.spf1-test.mailzone.com.              IN  TXT     "v=spf1                                                             "
+02.spf1-test.mailzone.com.              IN  TXT     "v=spf1                                             -all       "
+03.spf1-test.mailzone.com.              IN  TXT     "v=spf1                                             ~all"
+05.spf1-test.mailzone.com.              IN  TXT     "v=spf1                                             default=deny   "
+06.spf1-test.mailzone.com.              IN  TXT     "v=spf1                                             ?all "
+07.spf1-test.mailzone.com.              IN  TXT     "v=spf2                                             default=bogus   "
+08.spf1-test.mailzone.com.              IN  TXT     "v=spf1                       -all      ?all  "
+09.spf1-test.mailzone.com.              IN  TXT     "v=spf1    scope=header-from scope=envelope         -all  "
+10.spf1-test.mailzone.com.              IN  MX      10 mx01.spf1-test.mailzone.com.
+10.spf1-test.mailzone.com.              IN  MX      10 mx02.spf1-test.mailzone.com.
+10.spf1-test.mailzone.com.              IN  MX      20 mx03.spf1-test.mailzone.com.
+10.spf1-test.mailzone.com.              IN  TXT     "v=spf1 mx                                          -all"
+11.spf1-test.mailzone.com.              IN  TXT     "v=spf1    mx:spf1-test.mailzone.com                          -all"
+12.spf1-test.mailzone.com.              IN  MX      10 mx01.spf1-test.mailzone.com.
+12.spf1-test.mailzone.com.              IN  MX      10 mx02.spf1-test.mailzone.com.
+12.spf1-test.mailzone.com.              IN  MX      20 mx03.spf1-test.mailzone.com.
+12.spf1-test.mailzone.com.              IN  TXT     "v=spf1 mx mx:spf1-test.mailzone.com                          -all"
+13.spf1-test.mailzone.com.              IN  TXT     "v=spf1    mx:spf1-test.mailzone.com mx:fallback-relay.spf1-test.mailzone.com -all"
+14.spf1-test.mailzone.com.              IN  MX      10 mx01.spf1-test.mailzone.com.
+14.spf1-test.mailzone.com.              IN  MX      10 mx02.spf1-test.mailzone.com.
+14.spf1-test.mailzone.com.              IN  MX      20 mx03.spf1-test.mailzone.com.
+14.spf1-test.mailzone.com.              IN  TXT     "v=spf1 mx mx:spf1-test.mailzone.com mx:fallback-relay.spf1-test.mailzone.com -all"
+20.spf1-test.mailzone.com.              IN  A       192.0.2.120
+20.spf1-test.mailzone.com.              IN  TXT     "v=spf1 a                                           -all"
+21.spf1-test.mailzone.com.              IN  A       192.0.2.121
+21.spf1-test.mailzone.com.              IN  TXT     "v=spf1   a:spf1-test.mailzone.com                            -all"
+22.spf1-test.mailzone.com.              IN  A       192.0.2.122
+22.spf1-test.mailzone.com.              IN  TXT     "v=spf1 a a:spf1-test.mailzone.com                            -all"
+30.spf1-test.mailzone.com.              IN  A       208.210.124.130
+30.spf1-test.mailzone.com.              IN  TXT     "v=spf1 ptr                                         -all"
+31.spf1-test.mailzone.com.              IN  A       208.210.124.131
+31.spf1-test.mailzone.com.              IN  TXT     "v=spf1     ptr:spf1-test.mailzone.com                        -all"
+32.spf1-test.mailzone.com.              IN  A       208.210.124.132
+32.spf1-test.mailzone.com.              IN  TXT     "v=spf1 ptr ptr:spf1-test.mailzone.com                        -all"
+40.spf1-test.mailzone.com.              IN  TXT     "v=spf1 exists:%{ir}.%{v}._spf.%{d}                    -all"
+41.spf1-test.mailzone.com.              IN  TXT     "v=spf1 exists:%{ir}.%{v}._spf.spf1-test.mailzone.com            -all"
+42.spf1-test.mailzone.com.              IN  TXT     "v=spf1 exists:%{ir}.%{v}._spf.%{d} exists:%{ir}.%{v}._spf.%{d3} -all"
+45.spf1-test.mailzone.com.              IN  A       192.0.2.145
+45.spf1-test.mailzone.com.              IN  A       192.0.2.146
+45.spf1-test.mailzone.com.              IN  A       192.0.2.147
+45.spf1-test.mailzone.com.              IN  TXT     "v=spf1 -a a:spf1-test.mailzone.com                           -all"
+50.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include                                     -all"
+51.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include:42.spf1-test.mailzone.com                  -all"
+52.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include:53.spf1-test.mailzone.com                  -all"
+53.spf1-test.mailzone.com.              IN  CNAME   54.spf1-test.mailzone.com.
+54.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include:42.spf1-test.mailzone.com                  -all"
+55.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include:56.spf1-test.mailzone.com                  -all"
+;56.spf1-test.mailzone.com. RCODE=NXDOMAIN
+57.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include:spf1-test.mailzone.com         -all"
+58.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include:59.spf1-test.mailzone.com                  -all"
+59.spf1-test.mailzone.com.              IN  TXT     "v=spf1 include:58.spf1-test.mailzone.com                  -all"
+70.spf1-test.mailzone.com.              IN  TXT     "v=spf1 exists:%{lr+=}.lp._spf.spf1-test.mailzone.com -all"
+80.spf1-test.mailzone.com.              IN  A       208.210.124.180
+80.spf1-test.mailzone.com.              IN  TXT     "v=spf1 a mx exists:%{ir}.%{v}._spf.80.spf1-test.mailzone.com ptr -all"
+90.spf1-test.mailzone.com.              IN  TXT     "v=spf1  ip4:192.0.2.128/25 -all"
+91.spf1-test.mailzone.com.              IN  TXT     "v=spf1 -ip4:192.0.2.128/25 ip4:192.0.2.0/24 -all"
+92.spf1-test.mailzone.com.              IN  TXT     "v=spf1 ?ip4:192.0.2.192/26 ip4:192.0.2.128/25 -ip4:192.0.2.0/24 -all"
+95.spf1-test.mailzone.com.              IN  TXT     "v=spf1 exists:%{p}.whitelist.spf1-test.mailzone.com -all"
+96.spf1-test.mailzone.com.              IN  TXT     "v=spf1 -exists:%{d}.blacklist.spf1-test.mailzone.com -all"
+97.spf1-test.mailzone.com.              IN  TXT     "v=spf1 exists:%{p}.whitelist.spf1-test.mailzone.com -exists:%{d}.blacklist.spf1-test.mailzone.com -all"
+98.spf1-test.mailzone.com.              IN  A       192.0.2.98
+98.spf1-test.mailzone.com.              IN  MX      10 80.spf1-test.mailzone.com.
+98.spf1-test.mailzone.com.              IN  TXT     "v=spf1 a/26 mx/26 -all"
+99.spf1-test.mailzone.com.              IN  TXT     "v=spf1 -all exp=99txt.spf1-test.mailzone.com moo"
+99txt.spf1-test.mailzone.com.           IN  TXT     "u=%{u} s=%{s} d=%{d} t=%{t} h=%{h} i=%{i} %% U=%{U} S=%{S} D=%{D} T=%{T} H=%{H} I=%{I} %% moo"
+100.spf1-test.mailzone.com.             IN  TXT     "v=spf1      redirect=98.spf1-test.mailzone.com"
+101.spf1-test.mailzone.com.             IN  TXT     "v=spf1 -all redirect=98.spf1-test.mailzone.com"
+102.spf1-test.mailzone.com.             IN  TXT     "v=spf1 ?all redirect=98.spf1-test.mailzone.com"
+103.spf1-test.mailzone.com.             IN  TXT     "v=spf1      redirect=98.%{d3}"
+104.spf1-test.mailzone.com.             IN  TXT     "v=spf1      redirect=105.%{d3}"
+105.spf1-test.mailzone.com.             IN  TXT     "v=spf1      redirect=106.%{d3}"
+106.spf1-test.mailzone.com.             IN  TXT     "v=spf1      redirect=107.%{d3}"
+107.spf1-test.mailzone.com.             IN  TXT     "v=spf1       include:104.%{d3}"
+110.spf1-test.mailzone.com.             IN  TXT     "v=spf1 some:unrecognized=mechanism some=unrecognized:modifier -all"
+111.spf1-test.mailzone.com.             IN  A       192.0.2.200
+111.spf1-test.mailzone.com.             IN  MX      10 mx01.spf1-test.mailzone.com.
+111.spf1-test.mailzone.com.             IN  TXT     "v=spf1 mx -a gpg ~all exp=111txt.spf1-test.mailzone.com"
+111txt.spf1-test.mailzone.com.          IN  TXT     "explanation text"
+112.spf1-test.mailzone.com.             IN  A       192.0.2.200
+112.spf1-test.mailzone.com.             IN  TXT     "v=spf1 a mp3 ~all"
+113.spf1-test.mailzone.com.             IN  A       192.0.2.200
+113.spf1-test.mailzone.com.             IN  TXT     "v=spf1 a mp3: ~all"
+114.spf1-test.mailzone.com.             IN  A       192.0.2.200
+114.spf1-test.mailzone.com.             IN  MX      10 mx01.spf1-test.mailzone.com.
+114.spf1-test.mailzone.com.             IN  TXT     "v=spf1 mx -a gpg=test ~all exp=114txt.spf1-test.mailzone.com"
+114txt.spf1-test.mailzone.com.          IN  TXT     "explanation text"
+115.spf1-test.mailzone.com.             IN  A       192.0.2.200
+115.spf1-test.mailzone.com.             IN  TXT     "v=spf1 a mp3=yes -all"
+116.spf1-test.mailzone.com.             IN  A       192.0.2.200
+116.spf1-test.mailzone.com.             IN  TXT     "v=spf1 redirect=116rdr.spf1-test.mailzone.com a"
+116rdr.spf1-test.mailzone.com.          IN  TXT     "v=spf1 -all"
+117.spf1-test.mailzone.com.             IN  TXT     " v=spf1 +all"
+118.spf1-test.mailzone.com.             IN  TXT     "v=spf1 -all exp="
+119.spf1-test.mailzone.com.             IN  TXT     "v=spf1 -all exp="
+119.spf1-test.mailzone.com.             IN  TXT     "this is another txt entry that should be ignored"
+spf1-test.mailzone.com.                 IN  A       192.0.2.200
+spf1-test.mailzone.com.                 IN  A       208.210.124.192
+spf1-test.mailzone.com.                 IN  MX      10 mx01.spf1-test.mailzone.com.
+spf1-test.mailzone.com.                 IN  MX      10 mx02.spf1-test.mailzone.com.
+spf1-test.mailzone.com.                 IN  MX      20 mx03.spf1-test.mailzone.com.
+mx01.spf1-test.mailzone.com.            IN  A       192.0.2.10
+mx01.spf1-test.mailzone.com.            IN  A       192.0.2.11
+mx01.spf1-test.mailzone.com.            IN  A       192.0.2.12
+mx01.spf1-test.mailzone.com.            IN  A       192.0.2.13
+mx02.spf1-test.mailzone.com.            IN  A       192.0.2.20
+mx02.spf1-test.mailzone.com.            IN  A       192.0.2.21
+mx02.spf1-test.mailzone.com.            IN  A       192.0.2.22
+mx02.spf1-test.mailzone.com.            IN  A       192.0.2.23
+mx03.spf1-test.mailzone.com.            IN  A       192.0.2.30
+mx03.spf1-test.mailzone.com.            IN  A       192.0.2.31
+mx03.spf1-test.mailzone.com.            IN  A       192.0.2.32
+mx03.spf1-test.mailzone.com.            IN  A       192.0.2.33
+fallback-relay.spf1-test.mailzone.com.  IN  MX      10 mx04.spf1-test.mailzone.com.
+mx04.spf1-test.mailzone.com.            IN  A       192.0.2.43
+mx04.spf1-test.mailzone.com.            IN  A       192.0.2.40
+mx04.spf1-test.mailzone.com.            IN  A       192.0.2.41
+mx04.spf1-test.mailzone.com.            IN  A       192.0.2.42

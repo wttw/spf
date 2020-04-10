@@ -1,0 +1,114 @@
+<!--
+    openspf.org Test-Suite Schema
+    $Id$
+    vim:syn=xml sw=4 sts=4
+-->
+<?xml version="1.0" encoding="utf-8"?>
+<element name="spf-test-scenarios" xmlns="http://relaxng.org/ns/structure/1.0">
+    <zeroOrMore>
+        <element name="scenario">
+            <optional><attribute name="id"/></optional>
+            <interleave>
+                <element name="tests">
+                    <zeroOrMore>
+                        <element name="test">
+                            <attribute name="id"/>
+                            <optional><attribute name="spec" /></optional>
+                            <optional><attribute name="scope"/></optional>
+                            <interleave>
+                                <!-- An optional <description>: -->
+                                <optional>
+                                    <element name="description"><text/></element>
+                                </optional>
+                                <!-- An optional <comment>: -->
+                                <optional>
+                                    <element name="comment"><text/></element>
+                                </optional>
+                                <!-- Any of <helo>, <mfrom>[<helo>], <pra>: -->
+                                <choice>
+                                    <!-- <helo><host> -->
+                                    <interleave>
+                                        <element name="helo" ><text/></element>
+                                        <element name="host" ><text/></element>
+                                    </interleave>
+                                    <!-- <mfrom>[<helo>]<host> -->
+                                    <interleave>
+                                        <element name="mfrom"><text/></element>
+                                        <optional>
+                                            <element name="helo" ><text/></element>
+                                        </optional>
+                                        <element name="host" ><text/></element>
+                                    </interleave>
+                                    <!-- <pra><host> -->
+                                    <interleave>
+                                        <element name="pra"  ><text/></element>
+                                        <element name="host" ><text/></element>
+                                    </interleave>
+                                </choice>
+                                <!-- One or more expected <result>s: -->
+                                <oneOrMore>
+                                    <element name="result"><text/></element>
+                                </oneOrMore>
+                                <!-- An optional <explanation>: -->
+                                <optional>
+                                    <element name="explanation"><text/></element>
+                                </optional>
+                            </interleave>
+                        </element>
+                    </zeroOrMore>
+                </element>
+                <element name="zonedata">
+                    <zeroOrMore>
+                        <element name="domain">
+                            <attribute name="name"/>
+                            <zeroOrMore>
+                                <grammar>
+                                    <start>
+                                        <choice>
+                                            <!-- A DNS resource record: -->
+                                            <element name="record">
+                                                <attribute name="type"/>
+                                                <choice>
+                                                    <!-- Simple text: -->
+                                                    <text/>
+                                                    <!-- Or one or more <text> elements: -->
+                                                    <oneOrMore>
+                                                        <element name="text"><text/></element>
+                                                    </oneOrMore>
+                                                    <!-- Or an error/timeout: -->
+                                                    <ref name="error-or-timeout"/>
+                                                </choice>
+                                            </element>
+                                            <!-- Or a default error/timeout: -->
+                                            <ref name="error-or-timeout"/>
+                                            <!-- Or a SPF/TXT synthesis suppressor: -->
+                                            <element name="no-txt-synthesis"/>
+                                        </choice>
+                                    </start>
+                                    <define name="error-or-timeout">
+                                        <choice>
+                                            <!-- An <error>: -->
+                                            <element name="error">
+                                                <attribute name="rcode">
+                                                    <choice>
+                                                        <value>1</value>
+                                                        <value>2</value>
+                                                        <value>3</value>
+                                                        <value>4</value>
+                                                        <value>5</value>
+                                                    </choice>
+                                                </attribute>
+                                            </element>
+                                            <!-- Or a <timeout>: -->
+                                            <element name="timeout"><empty></element>
+                                        </choice>
+                                    </define>
+                                </grammar>
+                            </zeroOrMore>
+                        </element>
+                    </zeroOrMore>
+                </element>
+            </interleave>
+        </element>
+    </zeroOrMore>
+</element>
