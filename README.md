@@ -17,6 +17,35 @@ As well as providing an implementation of the SPF check_host() function it
 also provides hooks to instrument the checking process. The included example
 client uses these to show how an SPF record is evaluated.
 
+```shell
+spf is a commandline tool for evaluating spf records.
+
+ spf -ip 8.8.8.8 -from steve@aol.com
+
+ Result: softfail
+ Error:  <nil>
+ Explanation:
+
+If run with the -trace flag it will show the steps take to check the spf
+record, and if the -dns flag is added it will show all the DNS queries
+involved.
+
+ spf -help
+ Usage of spf:
+   -dns
+     	show dns queries
+   -from string
+     	821.From address
+   -helo string
+     	domain used in 821.HELO
+   -ip string
+     	ip address from which the message is sent
+   -mechanisms
+    	show details about each mechanism
+   -trace
+     	show evaluation of record
+```
+
 ```go
 import "github.com/wttw/spf"
 
