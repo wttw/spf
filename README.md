@@ -17,6 +17,8 @@ As well as providing an implementation of the SPF check_host() function it
 also provides hooks to instrument the checking process. The included example
 client uses these to show how an SPF record is evaluated.
 
+## Use as a CLI tool
+
 ```shell
 spf is a commandline tool for evaluating spf records.
 
@@ -45,6 +47,33 @@ involved.
    -trace
      	show evaluation of record
 ```
+
+```shell
+./spf -trace -from n_e_i_bounces@insideapple.apple.com -ip 17.179.250.63
+insideapple.apple.com.: v=spf1 include:_spf-txn.apple.com include:_spf-mkt.apple.com include:_spf.apple.com ~all
+_spf-txn.apple.com.: v=spf1 ip4:17.151.1.0/24 ip4:17.171.37.0/24 ip4:17.111.110.0/23 ~all
+_spf-txn.apple.com. returns softfail: v=spf1 ip4:17.151.1.0/24 ip4:17.171.37.0/24 ip4:17.111.110.0/23 ~all
+insideapple.apple.com. included _spf-txn.apple.com which didn't match
+_spf-mkt.apple.com.: v=spf1 ip4:17.171.23.0/24 ip4:17.179.250.0/24 ip4:17.32.227.0/24 ip4:17.240.6.0/24 ip4:17.240.49.0/24 ~all
+_spf-mkt.apple.com. returns pass: v=spf1 ip4:17.171.23.0/24 ip4:17.179.250.0/24 ip4:17.32.227.0/24 ip4:17.240.6.0/24 ip4:17.240.49.0/24 ~all
+insideapple.apple.com. included _spf-mkt.apple.com which matched, so the include returned pass
+insideapple.apple.com. returns pass: v=spf1 include:_spf-txn.apple.com include:_spf-mkt.apple.com include:_spf.apple.com ~all
+Result: pass
+Error:  <nil>
+Explanation:
+```
+
+### Installing binaries
+
+Binary releases of the commandline tool `spf` are available under [Releases](https://github.com/wttw/spf/releases).
+
+You'll need to unpack them with `tar zxf spf-<stuff>.tar.gz` or unzip the Windows packages.
+
+These are built automatically and right now the workflow doesn't sign the binaries. You'll need to bypass
+the check for that, e.g. on macOS open it in finder, right click on it and select `Open` then give permission
+for it to run.
+
+## Use as a library
 
 ```go
 import "github.com/wttw/spf"
