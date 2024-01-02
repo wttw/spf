@@ -1,7 +1,9 @@
 package spf
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -109,7 +111,6 @@ func (c *Checker) ExpandMacro(ctx context.Context, domainSpec string, result *Re
 	return expansion, err
 }
 
-
 func (c *Checker) expandMacro(ctx context.Context, domainSpec string, result *Result, domain string, exp bool) (string, error) {
 	percent := strings.Index(domainSpec, "%")
 	if percent == -1 {
@@ -153,7 +154,21 @@ func (c *Checker) expandMacro(ctx context.Context, domainSpec string, result *Re
 			case "d":
 				replacement = strings.TrimSuffix(domain, ".")
 			case "i":
-				replacement = result.ip.String()
+				if result.ip.To4() == nil {
+					v6 := result.ip.To16()
+					enc := make([]byte, 32)
+					hex.Encode(enc, v6)
+					var buff bytes.Buffer
+					for i, b := range enc {
+						if i != 0 {
+							buff.Write([]byte{'.'})
+						}
+						buff.Write([]byte{b})
+					}
+					replacement = buff.String()
+				} else {
+					replacement = result.ip.String()
+				}
 			case "p":
 				replacement = expandPtrMacro(ctx, result, domain)
 			case "h":
