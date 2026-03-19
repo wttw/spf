@@ -3,14 +3,15 @@ package spf_test
 import (
 	"context"
 	"fmt"
-	"github.com/miekg/dns"
-	"github.com/wttw/spf"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/miekg/dns"
+	"github.com/wttw/spf/v2"
 
 	"gopkg.in/yaml.v2"
 )
