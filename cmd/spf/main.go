@@ -1,52 +1,51 @@
 /*
 spf is a commandline tool for evaluating spf records.
 
- spf -ip 8.8.8.8 -from steve@aol.com
+	spf -ip 8.8.8.8 -from steve@aol.com
 
- Result: softfail
- Error:  <nil>
- Explanation:
+	Result: softfail
+	Error:  <nil>
+	Explanation:
 
 If run with the -trace flag it will show the steps take to check the spf
 record, and if the -dns flag is added it will show all the DNS queries
 involved.
 
- spf -help
- Usage of spf:
-   -dns
-     	show dns queries
-   -from string
-     	821.From address
-   -helo string
-     	domain used in 821.HELO
-   -ip string
-     	ip address from which the message is sent
-   -mechanisms
-    	show details about each mechanism
-   -trace
-     	show evaluation of record
+	spf -help
+	Usage of spf:
+	  -dns
+	    	show dns queries
+	  -from string
+	    	821.From address
+	  -helo string
+	    	domain used in 821.HELO
+	  -ip string
+	    	ip address from which the message is sent
+	  -mechanisms
+	   	show details about each mechanism
+	  -trace
+	    	show evaluation of record
 */
 package main
 
 import (
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsutil"
 	"context"
 	"flag"
 	"fmt"
 	"github.com/logrusorgru/aurora"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/miekg/dns"
 	"io"
 	"log"
-	"net"
+	"net/netip"
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/wttw/spf"
+	"github.com/wttw/spf/v2"
 )
-
-
 
 func main() {
 	var ip, from, domain, helo string
@@ -72,9 +71,9 @@ func main() {
 		domain = from[at+1:]
 	}
 
-	addr := net.ParseIP(ip)
-	if addr == nil {
-		log.Fatalf("'%s' doesn't look like an ip address", ip)
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		log.Fatalf("'%s' doesn't look like an ip address: %s", ip, err.Error())
 	}
 
 	c := spf.NewChecker()
@@ -139,9 +138,9 @@ func (t *Tracer) Printf(format string, a ...interface{}) (int, error) {
 
 var _ spf.Hook = &Tracer{}
 
-func (t *Tracer) Dns(r *dns.Msg, m *dns.Msg, err error) {
+func (t *Tracer) Dns(r *dns.Msg, m *dns.Msg, _ error) {
 	if t.dns {
-		t.Printf("%s request for %s\n", dns.Type(r.Question[0].Qtype).String(), r.Question[0].Name)
+		t.Printf("%s request for %s\n", dnsutil.TypeToString(dns.RRToType(r.Question[0])), r.Question[0].Header().Name)
 		t.Printf("%s\n", t.au.Cyan(m.String()))
 	}
 }
