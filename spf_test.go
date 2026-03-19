@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/miekg/dns"
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsutil"
+	"codeberg.org/miekg/dns/rdata"
 	"github.com/wttw/spf/v2"
 
 	"gopkg.in/yaml.v2"
@@ -20,7 +22,7 @@ type Test struct {
 	Spec        interface{}
 	Description string
 	Helo        string
-	Host        net.IP
+	Host        netip.Addr
 	MailFrom    string
 	Result      interface{}
 	Explanation string
@@ -67,27 +69,31 @@ var _ spf.Resolver = TestResolver{}
 
 func (res TestResolver) Resolve(_ context.Context, r *dns.Msg) (*dns.Msg, error) {
 	m := &dns.Msg{}
-	m.SetReply(r)
-	hostRRs, ok := res[strings.ToLower(r.Question[0].Name)]
+	dnsutil.SetReply(m, r)
+
+	hostRRs, ok := res[strings.ToLower(r.Question[0].Header().Name)]
 	if !ok {
-		m.SetRcode(r, dns.RcodeNameError) // NXDOMAIN
+		m.Rcode = dns.RcodeNameError // NXDOMAIN
+		fmt.Printf("NXDOMAIN Question: %v\n", r.Question[0].String())
 		return m, nil
 	}
 
-	response, ok := hostRRs[r.Question[0].Qtype]
+	response, ok := hostRRs[dns.RRToType(r.Question[0])]
 	if ok {
 		m = response.Copy()
-		m.SetReply(r)
+		//dnsutil.SetReply(m, r)
 	} else {
 
 		_, ok = hostRRs[0]
 		if ok {
-			m.SetRcode(r, dns.RcodeServerFailure) // SERVFAIL
+			m.Rcode = dns.RcodeServerFailure // SERVFAIL
+			fmt.Printf("SERVFAIL Question: %v\n", r.Question[0].String())
 			return m, nil
 		}
 	}
 
-	m.SetRcode(r, dns.RcodeSuccess)
+	m.Rcode = dns.RcodeSuccess
+	fmt.Printf("SUCCESS Question: %v -> %v\n", r.Question[0].String(), m.Answer)
 	return m, nil
 }
 
@@ -100,7 +106,7 @@ func (s Suite) Zone(t *testing.T) TestResolver {
 	// as TXT?)
 
 	for hostname, answers := range s.ZoneData {
-		hostname = strings.ToLower(dns.Fqdn(hostname))
+		hostname = strings.ToLower(dnsutil.Fqdn(hostname))
 		_, ok := ret[hostname]
 		if !ok {
 			ret[hostname] = map[uint16]*dns.Msg{}
@@ -110,7 +116,7 @@ func (s Suite) Zone(t *testing.T) TestResolver {
 		for _, answer := range answers {
 			switch v := answer.(type) {
 			case map[interface{}]interface{}:
-				for typeThing, _ := range v {
+				for typeThing := range v {
 					typeString, ok := typeThing.(string)
 					if ok && typeString == "TXT" /* && strings.HasPrefix(value.(string), "v=spf1")*/ {
 						seenTXT = true
@@ -138,50 +144,65 @@ func (s Suite) Zone(t *testing.T) TestResolver {
 					}
 
 					var rr dns.RR
-					hdr := dns.RR_Header{
-						Name:   hostname,
-						Rrtype: typeID,
-						Class:  dns.ClassINET,
-						Ttl:    30,
+					hdr := dns.Header{
+						Name:  hostname,
+						Class: dns.ClassINET,
+						TTL:   30,
 					}
 					switch typeID {
 					case dns.TypeSPF:
 						rr = &dns.SPF{
-							Hdr: hdr,
-							Txt: toSlice(value),
+							TXT: dns.TXT{
+								Hdr: hdr,
+								TXT: rdata.TXT{
+									Txt: toSlice(value),
+								},
+							},
 						}
 					case dns.TypeMX:
 						slice := value.([]interface{})
 						weight := slice[0].(int)
 						rr = &dns.MX{
-							Hdr:        hdr,
-							Preference: uint16(weight),
-							Mx:         dns.Fqdn(slice[1].(string)),
+							Hdr: hdr,
+							MX: rdata.MX{
+								Preference: uint16(weight),
+								Mx:         dnsutil.Fqdn(slice[1].(string)),
+							},
 						}
 					case dns.TypeTXT:
 						rr = &dns.TXT{
 							Hdr: hdr,
-							Txt: toSlice(value),
+							TXT: rdata.TXT{
+								Txt: toSlice(value),
+							},
 						}
 					case dns.TypeA:
 						rr = &dns.A{
 							Hdr: hdr,
-							A:   net.ParseIP(value.(string)),
+							A: rdata.A{
+								Addr: netip.MustParseAddr(value.(string)),
+							},
 						}
 					case dns.TypeAAAA:
 						rr = &dns.AAAA{
-							Hdr:  hdr,
-							AAAA: net.ParseIP(value.(string)),
+							Hdr: hdr,
+							AAAA: rdata.AAAA{
+								Addr: netip.MustParseAddr(value.(string)),
+							},
 						}
 					case dns.TypePTR:
 						rr = &dns.PTR{
 							Hdr: hdr,
-							Ptr: dns.Fqdn(value.(string)),
+							PTR: rdata.PTR{
+								Ptr: dnsutil.Fqdn(value.(string)),
+							},
 						}
 					case dns.TypeCNAME:
 						rr = &dns.CNAME{
-							Hdr:    hdr,
-							Target: value.(string),
+							Hdr: hdr,
+							CNAME: rdata.CNAME{
+								Target: value.(string),
+							},
 						}
 					default:
 						t.Fatalf("Unhandled RR type '%s' in %s", typeString, hostname)
@@ -205,13 +226,14 @@ func (s Suite) Zone(t *testing.T) TestResolver {
 							m = &dns.Msg{}
 						}
 						m.Answer = append(m.Answer, &dns.TXT{
-							Hdr: dns.RR_Header{
-								Name:   hostname,
-								Rrtype: dns.TypeTXT,
-								Class:  dns.ClassINET,
-								Ttl:    30,
+							Hdr: dns.Header{
+								Name:  hostname,
+								Class: dns.ClassINET,
+								TTL:   30,
 							},
-							Txt: toSlice(value),
+							TXT: rdata.TXT{
+								Txt: toSlice(value),
+							},
 						})
 						ret[hostname][dns.TypeTXT] = m
 					}

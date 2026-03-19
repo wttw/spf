@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/miekg/dns"
-	"net"
+	"net/netip"
+
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsutil"
+
 	"regexp"
 	"strconv"
 	"strings"
@@ -43,7 +46,7 @@ func (m MechanismAll) Evaluate(_ context.Context, _ *Result, _ string) (ResultTy
 }
 
 func (m MechanismAll) String() string {
-	return mechanismString(m.Qualifier, "all","", net.IPMask{}, net.IPMask{})
+	return mechanismString(m.Qualifier, "all", "", 32, 128)
 }
 
 // 5.2.  "include"
@@ -86,7 +89,7 @@ func (m MechanismInclude) Evaluate(ctx context.Context, result *Result, domain s
 	if !validDomainName(dom) {
 		return None, fmt.Errorf("invalid hostname '%s'", dom)
 	}
-	includeResult := result.c.checkHost(ctx, result, dns.Fqdn(dom), true, false)
+	includeResult := result.c.checkHost(ctx, result, dnsutil.Fqdn(dom), true, false)
 
 	switch includeResult {
 	case Pass:
@@ -102,7 +105,7 @@ func (m MechanismInclude) Evaluate(ctx context.Context, result *Result, domain s
 }
 
 func (m MechanismInclude) String() string {
-	return mechanismString(m.Qualifier, "include",m.DomainSpec, net.IPMask{}, net.IPMask{})
+	return mechanismString(m.Qualifier, "include", m.DomainSpec, 32, 128)
 }
 
 // 5.3.  "a"
@@ -123,14 +126,14 @@ func (m MechanismInclude) String() string {
 type MechanismA struct {
 	Qualifier  ResultType
 	DomainSpec string
-	Mask4      net.IPMask
-	Mask6      net.IPMask
+	Len4       int
+	Len6       int
 }
 
 func (m MechanismA) Evaluate(ctx context.Context, result *Result, domain string) (ResultType, error) {
 	result.DNSQueries++
 	var qtype uint16
-	if result.ip.To4() == nil {
+	if result.ip.Is6() {
 		qtype = dns.TypeAAAA
 	} else {
 		qtype = dns.TypeA
@@ -152,11 +155,13 @@ func (m MechanismA) Evaluate(ctx context.Context, result *Result, domain string)
 	for _, rr := range rrs {
 		switch v := rr.(type) {
 		case *dns.A:
-			if (&net.IPNet{IP: v.A, Mask: m.Mask4}).Contains(result.ip) {
+			pfx, err := v.A.Addr.Prefix(m.Len4)
+			if err == nil && pfx.Contains(result.ip) {
 				return m.Qualifier, nil
 			}
 		case *dns.AAAA:
-			if (&net.IPNet{IP: v.AAAA, Mask: m.Mask6}).Contains(result.ip) {
+			pfx, err := v.AAAA.Addr.Prefix(m.Len6)
+			if err == nil && pfx.Contains(result.ip) {
 				return m.Qualifier, nil
 			}
 		}
@@ -165,7 +170,7 @@ func (m MechanismA) Evaluate(ctx context.Context, result *Result, domain string)
 }
 
 func (m MechanismA) String() string {
-	return mechanismString(m.Qualifier, "a", m.DomainSpec, m.Mask4, m.Mask6)
+	return mechanismString(m.Qualifier, "a", m.DomainSpec, m.Len4, m.Len6)
 }
 
 // 5.4.  "mx"
@@ -189,21 +194,20 @@ func (m MechanismA) String() string {
 type MechanismMX struct {
 	Qualifier  ResultType
 	DomainSpec string
-	Mask4      net.IPMask
-	Mask6      net.IPMask
+	Len4       int
+	Len6       int
 }
-
 
 func (m MechanismMX) Evaluate(ctx context.Context, result *Result, domain string) (ResultType, error) {
 	result.DNSQueries++
 	var qtype uint16
-	var mask net.IPMask
-	if result.ip.To4() == nil {
+	var maskLen int
+	if result.ip.Is6() {
 		qtype = dns.TypeAAAA
-		mask = m.Mask6
+		maskLen = m.Len6
 	} else {
 		qtype = dns.TypeA
-		mask = m.Mask4
+		maskLen = m.Len4
 	}
 
 	target, err := result.c.ExpandDomainSpec(ctx, m.DomainSpec, result, domain, false)
@@ -232,7 +236,8 @@ func (m MechanismMX) Evaluate(ctx context.Context, result *Result, domain string
 		}
 
 		for _, address := range addresses {
-			if (&net.IPNet{IP: address, Mask: mask}).Contains(result.ip) {
+			pfx, err := address.Prefix(maskLen)
+			if err == nil && pfx.Contains(result.ip) {
 				return m.Qualifier, nil
 			}
 		}
@@ -242,7 +247,7 @@ func (m MechanismMX) Evaluate(ctx context.Context, result *Result, domain string
 }
 
 func (m MechanismMX) String() string {
-	return mechanismString(m.Qualifier, "mx", m.DomainSpec, m.Mask4, m.Mask6)
+	return mechanismString(m.Qualifier, "mx", m.DomainSpec, m.Len4, m.Len6)
 }
 
 // 5.5.  "ptr" (do not use)
@@ -254,11 +259,10 @@ type MechanismPTR struct {
 }
 
 func (m MechanismPTR) String() string {
-	return mechanismString(m.Qualifier, "ptr", m.DomainSpec, net.IPMask{}, net.IPMask{})
+	return mechanismString(m.Qualifier, "ptr", m.DomainSpec, 32, 128)
 }
 
 // MechanismPtr.Evaluate is in ptr.go
-
 
 // 5.6.  "ip4" and "ip6"
 //
@@ -272,36 +276,36 @@ func (m MechanismPTR) String() string {
 // connecting IP being within the provided address range.
 type MechanismIp4 struct {
 	Qualifier ResultType
-	Net       *net.IPNet
+	Prefix    netip.Prefix
 }
 
 func (m MechanismIp4) Evaluate(_ context.Context, result *Result, _ string) (ResultType, error) {
-	if m.Net.Contains(result.ip) {
+	if m.Prefix.Contains(result.ip) {
 		return m.Qualifier, nil
 	}
 	return None, nil
 }
 
 func (m MechanismIp4) String() string {
-	return mechanismString(m.Qualifier, "ip4", m.Net.String(), net.IPMask{}, net.IPMask{})
+	return mechanismString(m.Qualifier, "ip4", m.Prefix.String(), 32, 128)
 }
 
 // MechanismIp6 represents an SPF "ip6" mechanism. It matches based on the
 // connecting IP being within the provided address range.
 type MechanismIp6 struct {
 	Qualifier ResultType
-	Net       *net.IPNet
+	Prefix    netip.Prefix
 }
 
 func (m MechanismIp6) Evaluate(_ context.Context, result *Result, _ string) (ResultType, error) {
-	if m.Net.Contains(result.ip) {
+	if m.Prefix.Contains(result.ip) {
 		return m.Qualifier, nil
 	}
 	return None, nil
 }
 
 func (m MechanismIp6) String() string {
-	return mechanismString(m.Qualifier, "ip6", m.Net.String(), net.IPMask{}, net.IPMask{})
+	return mechanismString(m.Qualifier, "ip6", m.Prefix.String(), 32, 128)
 }
 
 // 5.7.  "exists"
@@ -344,9 +348,8 @@ func (m MechanismExists) Evaluate(ctx context.Context, result *Result, domain st
 }
 
 func (m MechanismExists) String() string {
-	return mechanismString(m.Qualifier, "exists", m.DomainSpec, net.IPMask{}, net.IPMask{})
+	return mechanismString(m.Qualifier, "exists", m.DomainSpec, 32, 128)
 }
-
 
 //   ip4-cidr-length  = "/" ("0" / %x31-39 0*1DIGIT) ; value range 0-32
 //   ip6-cidr-length  = "/" ("0" / %x31-39 0*2DIGIT) ; value range 0-128
@@ -355,7 +358,7 @@ func (m MechanismExists) String() string {
 var v4CIDRRe = regexp.MustCompile(`/[0-9]{1,2}$`)
 var v6CIDRRe = regexp.MustCompile(`//[0-9]{1,3}$`)
 
-func dualCIDR(s string) (string, net.IPMask, net.IPMask, error) {
+func dualCIDR(s string) (string, int, int, error) {
 	loc6 := v6CIDRRe.FindStringIndex(s)
 
 	var err error
@@ -363,7 +366,7 @@ func dualCIDR(s string) (string, net.IPMask, net.IPMask, error) {
 	if loc6 != nil {
 		v6len, err = strconv.Atoi(s[loc6[0]+2:])
 		if err != nil || v6len > 128 {
-			return "", nil, nil, fmt.Errorf("invalid ipv6 cidr range in dual-cidr: %s", s[loc6[0]:])
+			return "", 0, 0, fmt.Errorf("invalid ipv6 cidr range in dual-cidr: %s", s[loc6[0]:])
 		}
 		s = s[:loc6[0]]
 	}
@@ -374,12 +377,12 @@ func dualCIDR(s string) (string, net.IPMask, net.IPMask, error) {
 		v4len, err = strconv.Atoi(s[loc4[0]+1:])
 
 		if err != nil || v4len > 32 {
-			return "", nil, nil, fmt.Errorf("invalid ipv4 cidr range in dual-cidr: %s", s[loc4[0]:])
+			return "", 0, 0, fmt.Errorf("invalid ipv4 cidr range in dual-cidr: %s", s[loc4[0]:])
 		}
 		s = s[:loc4[0]]
 	}
 
-	return s, net.CIDRMask(v4len, 32), net.CIDRMask(v6len, 128), nil
+	return s, v4len, v6len, nil
 }
 
 // NewMechanism creates a new Mechanism from it's text representation
@@ -461,7 +464,7 @@ func NewMechanism(raw string) (Mechanism, error) {
 		if emptyParam {
 			return nil, errors.New("empty domain in a mechanism")
 		}
-		domainSpec, v4Mask, v6Mask, err := dualCIDR(parameter)
+		domainSpec, len4, len6, err := dualCIDR(parameter)
 		if err != nil {
 			return nil, err
 		}
@@ -471,14 +474,14 @@ func NewMechanism(raw string) (Mechanism, error) {
 		return MechanismA{
 			Qualifier:  qualifier,
 			DomainSpec: domainSpec,
-			Mask4:      v4Mask,
-			Mask6:      v6Mask,
+			Len4:       len4,
+			Len6:       len6,
 		}, nil
 	case "mx":
 		if emptyParam {
 			return nil, errors.New("empty domain in mx mechanism")
 		}
-		domainSpec, v4Mask, v6Mask, err := dualCIDR(parameter)
+		domainSpec, len4, len6, err := dualCIDR(parameter)
 		if err != nil {
 			return nil, err
 		}
@@ -488,8 +491,8 @@ func NewMechanism(raw string) (Mechanism, error) {
 		return MechanismMX{
 			Qualifier:  qualifier,
 			DomainSpec: domainSpec,
-			Mask4:      v4Mask,
-			Mask6:      v6Mask,
+			Len4:       len4,
+			Len6:       len6,
 		}, nil
 	case "ptr":
 		if emptyParam {
@@ -507,32 +510,33 @@ func NewMechanism(raw string) (Mechanism, error) {
 		if !strings.Contains(addr, "/") {
 			addr = addr + "/32"
 		}
-		ip, cidr, err := parseCIDR(addr)
+		//ip, cidr, err := parseCIDR(addr)
+		prefix, err := netip.ParsePrefix(addr)
 		if err != nil {
 			return nil, errors.New("invalid address format")
 		}
-		if ip.To4() == nil {
+		if !prefix.Addr().Is4() {
 			return nil, errors.New("non-IP4 address in ip4")
 		}
 		return MechanismIp4{
 			Qualifier: qualifier,
-			Net:       cidr,
+			Prefix:    prefix.Masked(),
 		}, nil
 	case "ip6":
 		addr := parameter
 		if !strings.Contains(addr, "/") {
 			addr = addr + "/128"
 		}
-		ip, cidr, err := parseCIDR(addr)
+		prefix, err := netip.ParsePrefix(addr)
 		if err != nil {
 			return nil, errors.New("invalid address format")
 		}
-		if len(ip) != 16 {
+		if !prefix.Addr().Is6() {
 			return nil, errors.New("non-IP6 address in ip6:")
 		}
 		return MechanismIp6{
 			Qualifier: qualifier,
-			Net:       cidr,
+			Prefix:    prefix.Masked(),
 		}, nil
 	case "exists":
 		if parameter == "" {
@@ -554,15 +558,15 @@ func NewMechanism(raw string) (Mechanism, error) {
 
 // ResultChar maps between the spf.ResultType and the equivalent single character
 // qualifier used in SPF text format.
-var ResultChar=map[ResultType]string{
-	None: "",
-	Neutral: "?",
-	Pass: "",
-	Fail: "-",
+var ResultChar = map[ResultType]string{
+	None:     "",
+	Neutral:  "?",
+	Pass:     "",
+	Fail:     "-",
 	Softfail: "~",
 }
 
-func mechanismString(qualifier ResultType, name string, parameter string, mask4, mask6 net.IPMask) string {
+func mechanismString(qualifier ResultType, name string, parameter string, len4, len6 int) string {
 	var sb strings.Builder
 	mod, ok := ResultChar[qualifier]
 	if ok {
@@ -574,15 +578,14 @@ func mechanismString(qualifier ResultType, name string, parameter string, mask4,
 		sb.WriteString(parameter)
 	}
 
-	ones, bits := mask4.Size()
-	if bits != 0 && ones !=32{
+	if len4 != 32 {
 		sb.WriteString("/")
-		sb.WriteString(strconv.Itoa(ones))
+		sb.WriteString(strconv.Itoa(len4))
 	}
-	ones, bits = mask6.Size()
-	if bits != 0 && ones != 128 {
+
+	if len6 != 128 {
 		sb.WriteString("//")
-		sb.WriteString(strconv.Itoa(ones))
+		sb.WriteString(strconv.Itoa(len6))
 	}
 	return sb.String()
 }

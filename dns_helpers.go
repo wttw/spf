@@ -1,12 +1,14 @@
 package spf
 
 import (
+	"net/netip"
+
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsutil"
+
 	"context"
 	"fmt"
-	"github.com/miekg/dns"
-	"net"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -14,8 +16,7 @@ var spfPrefixRe = regexp.MustCompile(`(?i)^v=spf1(?: |$)`)
 
 // Gets a single SPF record for a domain, as a single string
 func (c *Checker) getSPFRecord(ctx context.Context, domain string) (string, ResultType, error) {
-	r := &dns.Msg{}
-	r.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
+	r := dns.NewMsg(dnsutil.Fqdn(domain), dns.TypeTXT)
 	m, err := c.resolve(ctx, r)
 	if err != nil {
 		return "", Temperror, err
@@ -76,13 +77,9 @@ var allNumeric = regexp.MustCompile(`^[0-9]*$`)
 
 // DNS allows arbitrary 8 bit data, so a simple dns.IsDomainName() isn't strict enough
 func validDomainName(hostname string) bool {
-	atoms, ok := dns.IsDomainName(hostname)
-	if !ok || atoms < 2 {
+	if !dnsutil.IsName(hostname) || dnsutil.Labels(hostname) < 2 {
 		return false
 	}
-	//if domainInvalidChars.MatchString(hostname) {
-	//	return false
-	//}
 
 	matches := validDomainSuffix.FindStringSubmatch(hostname)
 	if matches == nil {
@@ -135,8 +132,7 @@ func validDomainSpec(domainSpec string) bool {
 // lookupDNS does a basic DNS query, returning only matching records, and deals
 // with void query lookups
 func (c *Checker) lookupDNS(ctx context.Context, hostname string, qtype uint16, result *Result) ([]dns.RR, ResultType, error) {
-	r := &dns.Msg{}
-	r.SetQuestion(dns.Fqdn(hostname), qtype)
+	r := dns.NewMsg(dnsutil.Fqdn(hostname), qtype)
 	m, err := c.resolve(ctx, r)
 	if err != nil {
 		return []dns.RR{}, Temperror, err
@@ -157,46 +153,47 @@ func (c *Checker) lookupDNS(ctx context.Context, hostname string, qtype uint16, 
 
 	ret := make([]dns.RR, 0, len(m.Answer))
 	for _, rr := range m.Answer {
-		if rr.Header().Rrtype == qtype {
+		if dns.RRToType(rr) == qtype {
 			ret = append(ret, rr)
 		}
 	}
 	return ret, None, nil
 }
 
-// lookupAddresses does either an A or AAAA lookup, returning matching results as []net.IP
-func (c *Checker) lookupAddresses(ctx context.Context, target string, qtype uint16, result *Result) ([]net.IP, ResultType, error) {
-	ret := []net.IP{}
+// lookupAddresses does either an A or AAAA lookup, returning matching results as []netip.Addr
+func (c *Checker) lookupAddresses(ctx context.Context, target string, qtype uint16, result *Result) ([]netip.Addr, ResultType, error) {
+	ret := []netip.Addr{}
 	rrs, resultType, err := c.lookupDNS(ctx, target, qtype, result)
 	if resultType != None {
-		return []net.IP{}, resultType, err
+		return []netip.Addr{}, resultType, err
 	}
 	for _, rr := range rrs {
 		switch v := rr.(type) {
 		case *dns.A:
-			ret = append(ret, v.A)
+			ret = append(ret, v.A.Addr)
 		case *dns.AAAA:
-			ret = append(ret, v.AAAA)
+			ret = append(ret, v.AAAA.Addr)
 		}
 	}
 	return ret, None, nil
 }
 
 // like net.ParseCIDR but a little less forgiving
-func parseCIDR(s string) (net.IP, *net.IPNet, error) {
-	ip, mask, err := net.ParseCIDR(s)
-	if err != nil {
-		return nil, nil, err
-	}
-	i := strings.Index(s, "/")
-	if i < 0 {
-		return nil, nil, &net.ParseError{Type: "CIDR address", Text: s}
-	}
-
-	maskIn := s[i+1:]
-	ones, _ := mask.Mask.Size()
-	if maskIn != strconv.Itoa(ones) {
-		return nil, nil, &net.ParseError{Type: "CIDR address", Text: s}
-	}
-	return ip, mask, err
-}
+//func parseCIDR(s string) (net.IP, *net.IPNet, error) {
+//ip, mask, err := net.ParseCIDR(s)
+//prefix, err := netip.ParsePrefix(s)
+//if err != nil {
+//	return nil, nil, err
+//}
+//i := strings.Index(s, "/")
+//if i < 0 {
+//	return nil, nil, &net.ParseError{Type: "CIDR address", Text: s}
+//}
+//
+//maskIn := s[i+1:]
+//ones, _ := mask.Mask.Size()
+//if maskIn != strconv.Itoa(ones) {
+//	return nil, nil, &net.ParseError{Type: "CIDR address", Text: s}
+//}
+//return ip, mask, err
+//}

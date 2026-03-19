@@ -2,7 +2,7 @@ package spf
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 )
 
 //go:generate enumer -type ResultType -transform=snake
@@ -69,7 +69,7 @@ type Result struct {
 	VoidLookups int
 	Explanation string
 	UsedHelo    bool
-	ip          net.IP
+	ip          netip.Addr
 	sender      string
 	helo        string
 	c           *Checker

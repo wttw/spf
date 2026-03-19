@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"regexp"
 
-	"github.com/miekg/dns"
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsutil"
+
 	"strings"
 )
 
@@ -60,7 +62,7 @@ func NewChecker() *Checker {
 var DefaultChecker *Checker
 
 // Check checks SPF policy for a message using both smtp.mailfrom and smtp.helo.
-func Check(ctx context.Context, ip net.IP, mailFrom string, helo string) (ResultType, string) {
+func Check(ctx context.Context, ip netip.Addr, mailFrom string, helo string) (ResultType, string) {
 	if DefaultChecker == nil {
 		DefaultChecker = NewChecker()
 	}
@@ -69,17 +71,17 @@ func Check(ctx context.Context, ip net.IP, mailFrom string, helo string) (Result
 }
 
 // SPF checks SPF policy for a message using both smtp.mailfrom and smtp.helo.
-func (c *Checker) SPF(ctx context.Context, ip net.IP, mailFrom string, helo string) Result {
+func (c *Checker) SPF(ctx context.Context, ip netip.Addr, mailFrom string, helo string) Result {
 	var result Result
 	if helo != "" {
 		result = Result{
 			Type:   None,
-			ip:     ip,
+			ip:     ip.Unmap(),
 			sender: mailFrom,
 			helo:   helo,
 			c:      c,
 		}
-		r := c.checkHost(ctx, &result, dns.Fqdn(helo), false, false)
+		r := c.checkHost(ctx, &result, dnsutil.Fqdn(helo), false, false)
 		result.Type = r
 		if r != None && r != Neutral {
 			result.UsedHelo = true
@@ -89,20 +91,20 @@ func (c *Checker) SPF(ctx context.Context, ip net.IP, mailFrom string, helo stri
 	if mailFrom != "" {
 		result = Result{
 			Type:   None,
-			ip:     ip,
+			ip:     ip.Unmap(),
 			sender: mailFrom,
 			helo:   helo,
 			c:      c,
 		}
 		at := strings.LastIndex(mailFrom, "@")
-		r := c.checkHost(ctx, &result, dns.Fqdn(mailFrom[at+1:]), false, false)
+		r := c.checkHost(ctx, &result, dnsutil.Fqdn(mailFrom[at+1:]), false, false)
 		result.Type = r
 	}
 	return result
 }
 
 // CheckHost implements the SPF check_host() function for a given domain.
-func (c *Checker) CheckHost(ctx context.Context, ip net.IP, domain, sender string, helo string) Result {
+func (c *Checker) CheckHost(ctx context.Context, ip netip.Addr, domain, sender string, helo string) Result {
 	result := Result{
 		Type:   None,
 		ip:     ip,
@@ -135,12 +137,12 @@ func (c *Checker) checkHostCore(ctx context.Context, result *Result, domain stri
 	//  known as "NXDOMAIN" [RFC2308]), check_host() immediately returns the
 	//  result "none".
 
-	if _, valid := dns.IsDomainName(domain); !valid {
+	if !dnsutil.IsName(domain) {
 		result.Error = errors.New("invalid domain")
 		return None
 	}
 
-	if !dns.IsFqdn(domain) {
+	if !dnsutil.IsFqdn(domain) {
 		result.Error = errors.New("domain not fully qualified")
 		return None
 	}
@@ -217,8 +219,7 @@ func (c *Checker) checkHostCore(ctx context.Context, result *Result, domain stri
 				if !validDomainName(target) {
 					return Permerror
 				}
-				r := &dns.Msg{}
-				r.SetQuestion(target, dns.TypeTXT)
+				r := dns.NewMsg(dnsutil.Fqdn(target), dns.TypeTXT)
 				m, err := c.resolve(ctx, r)
 				if err == nil && m.Rcode == dns.RcodeSuccess && len(m.Answer) == 1 {
 					txt, ok := m.Answer[0].(*dns.TXT)
@@ -245,7 +246,7 @@ func (c *Checker) checkHostCore(ctx context.Context, result *Result, domain stri
 			return Permerror
 		}
 
-		return c.checkHost(ctx, result, dns.Fqdn(target), false, true)
+		return c.checkHost(ctx, result, dnsutil.Fqdn(target), false, true)
 	}
 	return Neutral
 }
@@ -266,11 +267,12 @@ type SPFRecord struct {
 	OtherModifiers []string
 }
 
-//   modifier         = redirect / explanation / unknown-modifier
-//   unknown-modifier = name "=" macro-string
-//                      ; where name is not any known modifier
+// modifier         = redirect / explanation / unknown-modifier
+// unknown-modifier = name "=" macro-string
 //
-//   name             = ALPHA *( ALPHA / DIGIT / "-" / "_" / "." )
+//	; where name is not any known modifier
+//
+// name             = ALPHA *( ALPHA / DIGIT / "-" / "_" / "." )
 var modifierRe = regexp.MustCompile(`^((?i)[a-z][a-z0-9_.-]*)=(.*)`)
 
 // ParseSPF parses the text of an SPF record.

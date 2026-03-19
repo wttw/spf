@@ -154,8 +154,8 @@ func (c *Checker) expandMacro(ctx context.Context, domainSpec string, result *Re
 			case "d":
 				replacement = strings.TrimSuffix(domain, ".")
 			case "i":
-				if result.ip.To4() == nil {
-					v6 := result.ip.To16()
+				if !result.ip.Is4() {
+					v6 := result.ip.AsSlice()
 					enc := make([]byte, 32)
 					hex.Encode(enc, v6)
 					var buff bytes.Buffer
@@ -189,7 +189,7 @@ func (c *Checker) expandMacro(ctx context.Context, domainSpec string, result *Re
 				}
 				replacement = strconv.FormatInt(time.Now().Unix(), 10)
 			case "v":
-				if result.ip.To4() == nil {
+				if !result.ip.Is4() {
 					replacement = "ip6"
 				} else {
 					replacement = "in-addr"

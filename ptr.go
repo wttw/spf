@@ -3,7 +3,10 @@ package spf
 import (
 	"context"
 	"fmt"
-	"github.com/miekg/dns"
+
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsutil"
+
 	"strings"
 )
 
@@ -53,7 +56,7 @@ import (
 func (m MechanismPTR) Evaluate(ctx context.Context, result *Result, domain string) (ResultType, error) {
 	c := result.c
 	var qtype uint16
-	if result.ip.To4() != nil {
+	if result.ip.Is4() {
 		qtype = dns.TypeA
 	} else {
 		qtype = dns.TypeAAAA
@@ -63,15 +66,12 @@ func (m MechanismPTR) Evaluate(ctx context.Context, result *Result, domain strin
 	if err != nil {
 		return Permerror, err
 	}
-	target = dns.Fqdn(target)
+	target = dnsutil.Fqdn(target)
 	if !validDomainName(target) {
 		return Fail, fmt.Errorf("invalid hostname '%s'", target)
 	}
 
-	rev, err := dns.ReverseAddr(result.ip.String())
-	if err != nil {
-		return Permerror, err
-	}
+	rev := dnsutil.ReverseAddr(result.ip)
 	rrs, resultType, err := c.lookupDNS(ctx, rev, dns.TypePTR, result)
 	if err != nil {
 		return resultType, err
@@ -92,7 +92,7 @@ func (m MechanismPTR) Evaluate(ctx context.Context, result *Result, domain strin
 	for _, rr := range rrs {
 		hostname := rr.(*dns.PTR).Ptr
 		// If it's never going to match, skip the A/AAAA lookups
-		if !dns.IsSubDomain(target, hostname) {
+		if !dnsutil.IsBelow(target, hostname) {
 			continue
 		}
 
@@ -102,7 +102,7 @@ func (m MechanismPTR) Evaluate(ctx context.Context, result *Result, domain strin
 		}
 
 		for _, address := range addresses {
-			if address.Equal(result.ip) {
+			if 0 == address.Compare(result.ip) {
 				// this hostname is validated and matches
 				return m.Qualifier, nil
 			}
@@ -114,15 +114,12 @@ func (m MechanismPTR) Evaluate(ctx context.Context, result *Result, domain strin
 func expandPtrMacro(ctx context.Context, result *Result, target string) string {
 	c := result.c
 	var qtype uint16
-	if result.ip.To4() != nil {
+	if result.ip.Is4() {
 		qtype = dns.TypeA
 	} else {
 		qtype = dns.TypeAAAA
 	}
-	rev, err := dns.ReverseAddr(result.ip.String())
-	if err != nil {
-		return "unknown"
-	}
+	rev := dnsutil.ReverseAddr(result.ip)
 	rrs, _, err := c.lookupDNS(ctx, rev, dns.TypePTR, result)
 	if err != nil {
 		return "unknown"
@@ -132,7 +129,7 @@ func expandPtrMacro(ctx context.Context, result *Result, target string) string {
 	}
 
 	possibles := []string{}
-	target = dns.Fqdn(target)
+	target = dnsutil.Fqdn(target)
 	for _, rr := range rrs {
 		hostname := rr.(*dns.PTR).Ptr
 		addresses, _, err := c.lookupAddresses(ctx, hostname, qtype, result)
@@ -141,19 +138,19 @@ func expandPtrMacro(ctx context.Context, result *Result, target string) string {
 		}
 
 		for _, address := range addresses {
-			if address.Equal(result.ip) {
+			if 0 == address.Compare(result.ip) {
 				// this hostname is validated and matches
 				if strings.ToLower(hostname) == strings.ToLower(target) {
 					return strings.TrimSuffix(hostname, ".")
 				}
 				possibles = append(possibles, hostname)
-				break;
+				break
 			}
 		}
 	}
 	for _, possible := range possibles {
-		if dns.IsSubDomain(target, possible) {
-			return  strings.TrimSuffix(possible, ".")
+		if dnsutil.IsBelow(target, possible) {
+			return strings.TrimSuffix(possible, ".")
 		}
 	}
 	if len(possibles) > 0 {

@@ -3,20 +3,20 @@ package spf_test
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 
 	"github.com/wttw/spf/v2"
 )
 
 func ExampleCheck() {
-	ip := net.ParseIP("8.8.8.8")
+	ip := netip.MustParseAddr("8.8.8.8")
 	result, _ := spf.Check(context.Background(), ip, "steve@aol.com", "aol.com")
 	fmt.Println(result)
 	// Output: neutral
 }
 
 func ExampleChecker_SPF() {
-	ip := net.ParseIP("8.8.8.8")
+	ip := netip.MustParseAddr("8.8.8.8")
 	c := spf.NewChecker()
 	c.Hostname = "mail.example.com"
 	result := c.SPF(context.Background(), ip, "steve@aol.com", "aol.com")

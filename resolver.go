@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/miekg/dns"
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsconf"
 )
 
 // ResolvConf holds the path to a resolv.conf(5) format file used to
@@ -27,7 +28,7 @@ type DefaultResolver struct {
 // Resolve performs a low level DNS lookup using miekg/dns format packet representation.
 func (res *DefaultResolver) Resolve(ctx context.Context, r *dns.Msg) (*dns.Msg, error) {
 	if res.client == nil {
-		clientConfig, err := dns.ClientConfigFromFile(ResolvConf)
+		clientConfig, err := dnsconf.FromFile(ResolvConf)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to load %s: %w", ResolvConf, err)
 		}
@@ -40,11 +41,11 @@ func (res *DefaultResolver) Resolve(ctx context.Context, r *dns.Msg) (*dns.Msg, 
 		}
 		res.client = new(dns.Client)
 	}
-	r.SetEdns0(4096, false)
+	r.UDPSize, r.Security = 4096, true
 	var m *dns.Msg
 	var err error
 	for _, server := range res.servers {
-		m, _, err = res.client.ExchangeContext(ctx, r, server)
+		m, _, err = res.client.Exchange(ctx, r, "udp", server)
 		if err == nil {
 			return m, nil
 		}

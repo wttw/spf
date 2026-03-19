@@ -1,6 +1,6 @@
 module github.com/wttw/spf/v2
 
-go 1.25.0
+go 1.26.1
 
 require (
 	github.com/alvaroloes/enumer v1.1.2
