@@ -38,16 +38,24 @@ func (res *DefaultResolver) Resolve(ctx context.Context, r *dns.Msg) (*dns.Msg, 
 		for i, server := range clientConfig.Servers {
 			res.servers[i] = fmt.Sprintf("%s:%s", server, clientConfig.Port)
 		}
-		res.client = new(dns.Client)
+		res.client = &dns.Client{Net: "udp"}
 	}
 	r.SetEdns0(4096, false)
 	var m *dns.Msg
 	var err error
 	for _, server := range res.servers {
 		m, _, err = res.client.ExchangeContext(ctx, r, server)
-		if err == nil {
-			return m, nil
+		if err != nil {
+			continue
 		}
+		if m != nil && m.Truncated {
+			tcpClient := &dns.Client{Net: "tcp"}
+			m, _, err = tcpClient.ExchangeContext(ctx, r, server)
+			if err != nil {
+				continue
+			}
+		}
+		return m, nil
 	}
 	return m, err
 }
